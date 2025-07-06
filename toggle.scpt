@@ -2,12 +2,8 @@
 set logFilePath to (path to desktop folder as text) & "AppleScript_Log.txt"
 set logFilePathPOSIX to POSIX path of logFilePath
 
--- Function to append text to the log file
-on logMessage(messageText, filePath)
-	set dateStamp to (current date) as string
-	set logEntry to "-- " & dateStamp & ": " & messageText & return
-	do shell script "echo " & quoted form of logEntry & " >> " & quoted form of filePath
-end logMessage
+-- Global (or script-level) variable to hold the overall start time in nanoseconds
+property scriptStartTimeNano : 0.0
 
 -- Function to get current time in nanoseconds (high precision)
 on getNanoseconds()
@@ -16,55 +12,78 @@ on getNanoseconds()
 	return (do shell script "date +%s%N") as real
 end getNanoseconds
 
--- Start timing (high precision)
-set startTimeNano to my getNanoseconds()
-my logMessage("Script started. at " & startTimeNano, logFilePathPOSIX)
+-- Function to append text to the log file with elapsed time
+on logMessage(messageText, filePath)
+	-- Calculate elapsed time from the very start of the script
+	set currentTimeNano to my getNanoseconds()
+	set elapsedTimeMillis to (currentTimeNano - scriptStartTimeNano) / 1000000
+	-- Round elapsed time to 3 decimal places for readability
+	set roundedElapsedTime to (round (elapsedTimeMillis * 1000)) / 1000.0
+
+	set logEntry to "[+" & roundedElapsedTime & " ms] " & messageText & return
+	do shell script "echo " & quoted form of logEntry & " >> " & quoted form of filePath
+end logMessage
+
+
+-- Initialize the overall script start time
+set scriptStartTimeNano to my getNanoseconds()
+my logMessage("Script started.", logFilePathPOSIX)
 
 set appPath to "/Applications/WezTerm.app"
 set target to POSIX file appPath as alias
 
+-- *** NEW: Dynamically get the bundle ID ***
+my logMessage("Attempting to get WezTerm's bundle ID dynamically...", logFilePathPOSIX)
+set wezTermBundleID to ""
+try
+	set appBundleIDCommand to "mdls -name kMDItemCFBundleIdentifier -r " & quoted form of (POSIX path of appPath)
+	set wezTermBundleID to (do shell script appBundleIDCommand)
+	my logMessage("Dynamically retrieved WezTerm Bundle ID: " & wezTermBundleID, logFilePathPOSIX)
+on error errMsg number errNum
+	my logMessage("Failed to get WezTerm Bundle ID dynamically: " & errMsg & " (" & errNum & "). Falling back to hardcoded.", logFilePathPOSIX)
+	set wezTermBundleID to "com.github.wezterm" -- Fallback to hardcoded if dynamic fails
+end try
+-- *** END NEW ***
+
 set appIsRunning to false -- Flag to track if the app is found running by System Events
-set appWasVisible to false -- Flag to track if the app was visible when found
 
--- First, check running processes with System Events
+my logMessage("Attempting direct System Events check for WezTerm process...", logFilePathPOSIX)
+
+-- Directly check for the WezTerm process by its bundle ID
 tell application "System Events"
-	set ps to (every process whose background only is false)
+	-- Try block to handle cases where the process doesn't exist
+	try
+		-- Using 'bundle identifier' property of 'process' is generally preferred
+		set wezTermProcess to first process whose bundle identifier is wezTermBundleID
+		-- If no error, the process exists
+		set appIsRunning to true
+		my logMessage("System Events: WezTerm process found directly.", logFilePathPOSIX)
 
-	repeat with i in ps
-		set p to POSIX path of file of i
-		set p to POSIX file p as alias
-		if p is target then
-			set appIsRunning to true
-			if visible of i is true then
-				set appWasVisible to true
-				my logMessage("WezTerm is visible, setting to hide.", logFilePathPOSIX)
-				set visible of i to false -- Set visible to false via System Events
-			else
-				my logMessage("WezTerm is running but not visible, setting to bring to front.", logFilePathPOSIX)
-				set frontmost of i to true -- Set visible to false via System Events
-				-- We'll handle activation outside this block for robustness
-			end if
-			exit repeat -- Found it, so no need to check other processes
+		if visible of wezTermProcess is true then
+			my logMessage("System Events: WezTerm process visible. Hiding it.", logFilePathPOSIX)
+			set visible of wezTermProcess to false -- Set visible to false via System Events
+		else
+			my logMessage("System Events: WezTerm process running but not visible. Activating it.", logFilePathPOSIX)
+			-- Using the System Events process object's frontmost property is usually reliable here
+			set frontmost of wezTermProcess to true
 		end if
-	end repeat
+	on error
+		-- Process not found
+		set appIsRunning to false
+		my logMessage("System Events: WezTerm process not found (not running).", logFilePathPOSIX)
+	end try
 end tell -- End of System Events tell block
 
--- Now, perform actions based on the flags set by System Events
+-- Now, perform actions based on the flag set by System Events
 if appIsRunning is false then
 	-- If the application was not found in the running processes, launch it
-	my logMessage("WezTerm not found in running processes. Attempting to launch.", logFilePathPOSIX)
-	-- Simplified launch using only direct 'activate'
+	my logMessage("WezTerm not found running. Attempting to launch.", logFilePathPOSIX)
 	try
-		tell application appPath to activate
+		tell application appPath to activate -- Launch using appPath, activate brings to front
 		my logMessage("WezTerm launched via direct 'activate'.", logFilePathPOSIX)
 	on error errMsg number errNum
 		my logMessage("Failed to launch WezTerm via direct 'activate': " & errMsg & " (" & errNum & ").", logFilePathPOSIX)
 	end try
 end if
 
-my logMessage("Script finished", logFilePathPOSIX)
--- End timing and log duration in milliseconds (high precision)
-set endTimeNano to my getNanoseconds()
-set durationSeconds to (endTimeNano - startTimeNano) / 1000000000
-
-my logMessage("Duration: " & durationSeconds & " seconds.", logFilePathPOSIX)
+my logMessage("Script finished.", logFilePathPOSIX)
