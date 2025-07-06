@@ -70,38 +70,34 @@ my logMessage("Script started.", logFilePath)
 set appPath to "/Applications/WezTerm.app"
 set target to POSIX file appPath as alias
 
--- Dynamically get the bundle ID
-my logMessage("Attempting to get WezTerm's bundle ID dynamically...", logFilePath)
-set wezTermBundleID to ""
-try
-	set nsBundleClass to current application's NSBundle
-	set appURL to current application's NSURL's fileURLWithPath:appPath
+my logMessage("Attempting to get application's short name dynamically (Foundation method)...", logFilePath)
+set appShortName to ""
+set nsBundleClass to current application's NSBundle
+set appURL to current application's NSURL's fileURLWithPath:appPath
 
-	-- Get the bundle object for the application path
-	set appBundle to nsBundleClass's bundleWithURL:appURL
+set appBundle to nsBundleClass's bundleWithURL:appURL
 
-	if appBundle is not missing value then
-		-- Get the bundle identifier string
-		set wezTermBundleID to appBundle's bundleIdentifier() as text
-		-- my logMessage("Dynamically retrieved WezTerm Bundle ID: " & wezTermBundleID, logFilePath) -- Uncomment if logging
+if appBundle is not missing value then
+	-- Prefer CFBundleDisplayName if available, otherwise fall back to CFBundleName
+	set displayName to appBundle's objectForInfoDictionaryKey:("CFBundleDisplayName")
+	if displayName is not missing value then
+		set appShortName to displayName as text
 	else
-		error "Could not get NSBundle for application path: " & appPath
+		set appShortName to (appBundle's objectForInfoDictionaryKey:("CFBundleName")) as text
 	end if
-on error errMsg number errNum
-	my logMessage("Failed to get WezTerm Bundle ID dynamically: " & errMsg & " (" & errNum & "). Falling back to hardcoded.", logFilePath)
-	set wezTermBundleID to "com.github.wezterm" -- Fallback to hardcoded if dynamic fails
-end try
+	my logMessage("Dynamically retrieved App Short Name: " & appShortName & " (Foundation)", logFilePath)
+else
+	error "Could not get NSBundle for application path: " & appPath
+end if
 
 set appIsRunning to false -- Flag to track if the app is found running by System Events
 
 my logMessage("Attempting direct System Events check for WezTerm process...", logFilePath)
 
--- Directly check for the WezTerm process by its bundle ID
 tell application "System Events"
 	-- Try block to handle cases where the process doesn't exist
 	try
-		-- Using 'bundle identifier' property of 'process' is generally preferred
-		set wezTermProcess to first process whose bundle identifier is wezTermBundleID
+		set wezTermProcess to process appShortName
 		-- If no error, the process exists
 		set appIsRunning to true
 		my logMessage("System Events: WezTerm process found directly.", logFilePath)
