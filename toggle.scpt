@@ -13,13 +13,53 @@ on getTimeMillis()
 	return (timeSinceEpochSeconds * 1000) as real
 end getTimeMillis
 
+
 -- Global (or script-level) variable to hold the overall start time in milliseconds
 -- It's best practice to initialize properties at the top, but the first logMessage will set it if it's 0.0
+
+property DEBUG : false -- Set to 'true' for logging, 'false' to disable all log messages.
 property scriptStartTimeMillis : 0.0
-set scriptStartTimeMillis to my getTimeMillis()
+if DEBUG then
+    set scriptStartTimeMillis to my getTimeMillis()
+end if
+
+on privateLogToFile(entryText, filePath)
+	set fm to current application's NSFileManager's defaultManager()
+	set fileHandle to current application's NSFileHandle
+	set nsStringClass to current application's NSString
+
+	set fileExists to fm's fileExistsAtPath:filePath
+	set logEntryNSString to (nsStringClass's stringWithString:(entryText & (ASCII character 10)))
+	set logEntryData to logEntryNSString's dataUsingEncoding:(current application's NSUTF8StringEncoding)
+
+	try
+		if fileExists then
+			-- Open file for appending
+			set fh to fileHandle's fileHandleForWritingAtPath:filePath
+			if fh is not missing value then
+				fh's seekToEndOfFile() -- Move to the end of the file
+				fh's writeData:logEntryData -- Write the new data
+				fh's closeFile() -- Close the file handle
+			else
+				-- This means fileHandleForWritingAtPath returned nil (missing value), indicating it couldn't open for writing
+				-- This error will now propagate out of the try block
+				error "Could not get file handle for writing to log file at path: " & filePath
+			end if
+		else
+			-- If file doesn't exist, create it and write the first line
+			logEntryData's writeToFile:filePath atomically:false
+		end if
+	on error errMsg number errNum
+		-- No fallback to shell script here. The error will just bubble up.
+		error "Failed to write log entry to file '" & filePath & "': " & errMsg & " (" & errNum & ")"
+	end try
+end privateLogToFile
 
 -- Function to append text to the log file with elapsed time
 on logMessage(messageText, filePath)
+    if DEBUG is false then
+        return
+    end if
 	-- Calculate elapsed time from the very start of the script
 	set currentTimeMillis to my getTimeMillis()
 	set elapsedTimeMillis to (currentTimeMillis - scriptStartTimeMillis)
@@ -27,7 +67,8 @@ on logMessage(messageText, filePath)
 	set roundedElapsedTime to (round (elapsedTimeMillis * 1000)) / 1000.0
 
 	set logEntry to "[+" & roundedElapsedTime & " ms] " & messageText
-    do shell script "echo " & quoted form of logEntry & " >> " & quoted form of filePath
+    -- do shell script "echo " & quoted form of logEntry & " >> " & quoted form of filePath
+    privateLogToFile(logEntry, filePath)
 end logMessage
 
 my logMessage("Script started.", logFilePathPOSIX)
