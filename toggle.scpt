@@ -2,8 +2,6 @@
 set logFilePath to (path to desktop folder as text) & "AppleScript_Log.txt"
 set logFilePathPOSIX to POSIX path of logFilePath
 
--- Global (or script-level) variable to hold the overall start time in nanoseconds
-property scriptStartTimeNano : 0.0
 
 -- Function to get current time in nanoseconds (high precision)
 on getNanoseconds()
@@ -11,6 +9,9 @@ on getNanoseconds()
 	-- %N = nanoseconds (000000000-999999999)
 	return (do shell script "date +%s%N") as real
 end getNanoseconds
+
+-- Global (or script-level) variable to hold the overall start time in nanoseconds
+property scriptStartTimeNano : my getNanoseconds()
 
 -- Function to append text to the log file with elapsed time
 on logMessage(messageText, filePath)
@@ -24,9 +25,6 @@ on logMessage(messageText, filePath)
 	do shell script "echo " & quoted form of logEntry & " >> " & quoted form of filePath
 end logMessage
 
-
--- Initialize the overall script start time
-set scriptStartTimeNano to my getNanoseconds()
 my logMessage("Script started.", logFilePathPOSIX)
 
 set appPath to "/Applications/WezTerm.app"
