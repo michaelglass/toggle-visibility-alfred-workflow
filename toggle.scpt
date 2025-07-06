@@ -79,10 +79,19 @@ set target to POSIX file appPath as alias
 my logMessage("Attempting to get WezTerm's bundle ID dynamically...", logFilePath)
 set wezTermBundleID to ""
 try
-	-- Note: mdls still uses a shell script, but it's for metadata, not timing.
-	set appBundleIDCommand to "mdls -name kMDItemCFBundleIdentifier -r " & quoted form of (POSIX path of appPath)
-	set wezTermBundleID to (do shell script appBundleIDCommand)
-	my logMessage("Dynamically retrieved WezTerm Bundle ID: " & wezTermBundleID, logFilePath)
+	set nsBundleClass to current application's NSBundle
+	set appURL to current application's NSURL's fileURLWithPath:appPath
+
+	-- Get the bundle object for the application path
+	set appBundle to nsBundleClass's bundleWithURL:appURL
+
+	if appBundle is not missing value then
+		-- Get the bundle identifier string
+		set wezTermBundleID to appBundle's bundleIdentifier() as text
+		-- my logMessage("Dynamically retrieved WezTerm Bundle ID: " & wezTermBundleID, logFilePath) -- Uncomment if logging
+	else
+		error "Could not get NSBundle for application path: " & appPath
+	end if
 on error errMsg number errNum
 	my logMessage("Failed to get WezTerm Bundle ID dynamically: " & errMsg & " (" & errNum & "). Falling back to hardcoded.", logFilePath)
 	set wezTermBundleID to "com.github.wezterm" -- Fallback to hardcoded if dynamic fails
