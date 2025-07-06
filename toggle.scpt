@@ -31,27 +31,22 @@ on privateLogToFile(entryText, filePath)
 	set logEntryNSString to (nsStringClass's stringWithString:(entryText & (ASCII character 10)))
 	set logEntryData to logEntryNSString's dataUsingEncoding:(current application's NSUTF8StringEncoding)
 
-	try
-		if fileExists then
-			-- Open file for appending
-			set fh to fileHandle's fileHandleForWritingAtPath:filePath
-			if fh is not missing value then
-				fh's seekToEndOfFile() -- Move to the end of the file
-				fh's writeData:logEntryData -- Write the new data
-				fh's closeFile() -- Close the file handle
-			else
-				-- This means fileHandleForWritingAtPath returned nil (missing value), indicating it couldn't open for writing
-				-- This error will now propagate out of the try block
-				error "Could not get file handle for writing to log file at path: " & filePath
-			end if
+	if fileExists then
+		-- Open file for appending
+		set fh to fileHandle's fileHandleForWritingAtPath:filePath
+		if fh is not missing value then
+			fh's seekToEndOfFile() -- Move to the end of the file
+			fh's writeData:logEntryData -- Write the new data
+			fh's closeFile() -- Close the file handle
 		else
-			-- If file doesn't exist, create it and write the first line
-			logEntryData's writeToFile:filePath atomically:false
+			-- This means fileHandleForWritingAtPath returned nil (missing value), indicating it couldn't open for writing
+			-- This error will now propagate out of the try block
+			error "Could not get file handle for writing to log file at path: " & filePath
 		end if
-	on error errMsg number errNum
-		-- No fallback to shell script here. The error will just bubble up.
-		error "Failed to write log entry to file '" & filePath & "': " & errMsg & " (" & errNum & ")"
-	end try
+	else
+		-- If file doesn't exist, create it and write the first line
+		logEntryData's writeToFile:filePath atomically:false
+	end if
 end privateLogToFile
 
 -- Function to append text to the log file with elapsed time
@@ -128,14 +123,9 @@ end tell -- End of System Events tell block
 
 -- Now, perform actions based on the flag set by System Events
 if appIsRunning is false then
-	-- If the application was not found in the running processes, launch it
 	my logMessage("WezTerm not found running. Attempting to launch.", logFilePath)
-	try
-		tell application appPath to activate -- Launch using appPath, activate brings to front
-		my logMessage("WezTerm launched via direct 'activate'.", logFilePath)
-	on error errMsg number errNum
-		my logMessage("Failed to launch WezTerm via direct 'activate': " & errMsg & " (" & errNum & ").", logFilePath)
-	end try
+	tell application appPath to activate -- Launch using appPath, activate brings to front
+	my logMessage("WezTerm launched via direct 'activate'.", logFilePath)
 end if
 
 my logMessage("Script finished.", logFilePath)
