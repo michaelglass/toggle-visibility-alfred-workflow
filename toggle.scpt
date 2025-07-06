@@ -16,7 +16,7 @@ end getTimeMillis
 -- Global (or script-level) variable to hold the overall start time in milliseconds
 -- It's best practice to initialize properties at the top, but the first logMessage will set it if it's 0.0
 
-property DEBUG : false -- Set to 'true' for logging, 'false' to disable all log messages.
+property DEBUG : true -- Set to 'true' for logging, 'false' to disable all log messages.
 property scriptStartTimeMillis : 0.0
 if DEBUG then
     set scriptStartTimeMillis to my getTimeMillis()
